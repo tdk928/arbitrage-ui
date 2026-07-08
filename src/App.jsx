@@ -34,6 +34,10 @@ function ArbCard({ arb }) {
     () => calculateStakes(budget, legs),
     [budget, legs]
   );
+  const profitAmount =
+    budget > 0
+      ? Math.round(budget * (Number(arb.margin_pct) / 100) * 100) / 100
+      : null;
 
   function handleStakeInput(e) {
     setTotalStake(e.target.value.replace(/\D/g, ""));
@@ -67,6 +71,11 @@ function ArbCard({ arb }) {
           </label>
           <div className="margin-value">
             +{Number(arb.margin_pct).toFixed(2)}%
+            {profitAmount !== null && (
+              <span className="margin-amount">
+                {(budget + profitAmount).toFixed(2)}
+              </span>
+            )}
             <span className="margin-label">печалба</span>
           </div>
         </div>
