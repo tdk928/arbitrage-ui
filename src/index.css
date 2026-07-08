@@ -1,0 +1,177 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f1117;
+  color: #e6e8ee;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 20px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 24px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+button {
+  padding: 12px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: #3b82f6;
+  color: #fff;
+  transition: background 0.15s;
+}
+
+button:last-child {
+  background: #1f2430;
+  color: #e6e8ee;
+  border: 1px solid #2e3442;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.message {
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.message.empty {
+  background: #1f2430;
+  color: #9aa3b2;
+  text-align: center;
+}
+
+.message.error {
+  background: #3a1d22;
+  color: #f2a3ae;
+}
+
+.message.info {
+  background: #16281f;
+  color: #8fd6a8;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: #171b24;
+  border: 1px solid #262c3a;
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.match {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #9aa3b2;
+}
+
+.market {
+  background: #232a3a;
+  padding: 3px 9px;
+  border-radius: 6px;
+}
+
+.kickoff {
+  padding: 3px 0;
+}
+
+.margin {
+  text-align: right;
+  font-size: 20px;
+  font-weight: 800;
+  color: #4ade80;
+  white-space: nowrap;
+}
+
+.margin-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #9aa3b2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+table.legs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.legs th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9aa3b2;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 8px;
+  border-bottom: 1px solid #262c3a;
+}
+
+.legs td {
+  padding: 8px;
+  border-bottom: 1px solid #1e2330;
+}
+
+.legs tr:last-child td {
+  border-bottom: none;
+}
+
+.bookmaker {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.odd {
+  font-weight: 700;
+  color: #60a5fa;
+}
