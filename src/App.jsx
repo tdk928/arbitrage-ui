@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const RUN_URL = "/arbitrage/v3/run";
 const TOP10_URL = "/arbitrage/v3/top10";
+
+function calculateStakes(total, legs) {
+  if (!total || total <= 0 || !legs?.length) return [];
+  const impliedSum = legs.reduce((sum, leg) => sum + 1 / Number(leg.odd), 0);
+  if (impliedSum <= 0) return legs.map(() => 0);
+  return legs.map((leg) => {
+    const stake = total / impliedSum / Number(leg.odd);
+    return Math.round(stake * 100) / 100;
+  });
+}
 
 function formatKickoff(iso) {
   if (!iso) return null;
@@ -16,7 +26,19 @@ function formatKickoff(iso) {
 }
 
 function ArbCard({ arb }) {
+  const [totalStake, setTotalStake] = useState("");
   const kickoff = formatKickoff(arb.kickoff_utc);
+  const legs = arb.legs || [];
+  const budget = totalStake ? Number(totalStake) : 0;
+  const stakes = useMemo(
+    () => calculateStakes(budget, legs),
+    [budget, legs]
+  );
+
+  function handleStakeInput(e) {
+    setTotalStake(e.target.value.replace(/\D/g, ""));
+  }
+
   return (
     <div className="card">
       <div className="card-top">
@@ -32,8 +54,21 @@ function ArbCard({ arb }) {
           </div>
         </div>
         <div className="margin">
-          +{Number(arb.margin_pct).toFixed(2)}%
-          <span className="margin-label">печалба</span>
+          <label className="stake-input-wrap">
+            <span className="stake-input-label">Обща сума</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="stake-input"
+              placeholder="0"
+              value={totalStake}
+              onChange={handleStakeInput}
+            />
+          </label>
+          <div className="margin-value">
+            +{Number(arb.margin_pct).toFixed(2)}%
+            <span className="margin-label">печалба</span>
+          </div>
         </div>
       </div>
 
@@ -43,14 +78,25 @@ function ArbCard({ arb }) {
             <th>Букмейкър</th>
             <th>Залог</th>
             <th>Коефициент</th>
+            <th>Сума</th>
           </tr>
         </thead>
         <tbody>
-          {(arb.legs || []).map((leg, i) => (
+          {legs.map((leg, i) => (
             <tr key={i}>
               <td className="bookmaker">{leg.bookmaker}</td>
               <td>{leg.outcome}</td>
               <td className="odd">{Number(leg.odd).toFixed(2)}</td>
+              <td>
+                <input
+                  type="text"
+                  className="stake-readonly"
+                  readOnly
+                  tabIndex={-1}
+                  value={budget > 0 ? stakes[i].toFixed(2) : ""}
+                  placeholder="—"
+                />
+              </td>
             </tr>
           ))}
         </tbody>
