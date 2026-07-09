@@ -7,6 +7,7 @@ export default defineConfig({
     // Backend has no CORS middleware, so proxy API calls to it in dev.
     proxy: {
       "/arbitrage": "http://localhost:8000",
+      "/auth": "http://localhost:8000",
     },
   },
 });
