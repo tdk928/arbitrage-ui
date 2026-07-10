@@ -6,15 +6,95 @@
 **Backend base URL (local):** `http://localhost:8000`  
 **Frontend dev:** `http://localhost:5173`
 
+**Backend API reference (source of truth):**  
+`/Users/teodorkalev/Desktop/arbitrage/docs/API_CHANGELOG.md`
+
+> **Поддръжка:** Обновявай този файл преди всеки merge в `development`. Сверявай с backend `API_CHANGELOG.md`.
+
 ---
 
-## PR: `feature/auth-navbar` (текущ)
+## Текущо състояние (`development`)
+
+### Backend статус (merge-нато в `arbitrage` `development`)
+
+| Feature | Статус |
+|---------|--------|
+| Auth register/login | ✅ Live |
+| `GET /auth/users` | ✅ Live |
+| `PATCH /auth/users/{email}` | ✅ Live |
+| `POST /auth/users/{email}/activate` | ✅ Live — **UI pending** |
+| CORS за `localhost:5173` | ✅ |
+| v3 top10 / audit / run | ✅ Live |
+
+### UI pending (следваща работа)
+
+1. **`src/auth/api.js`** — wire `updateUser` към `PATCH /auth/users/{email}` (вече не е stub)
+2. **`src/auth/api.js`** — добави `activateUser(email)` → `POST /auth/users/{email}/activate` (без body)
+3. **`UsersPage`** — бутон „Activate 24h“ per row, вика `activateUser`, refresh таблицата
+4. JWT `has_active_subscription` — client features да го ползват след activate (re-login или refresh token flow)
+
+---
+
+## Admin: управление на потребители
+
+### Inline edit (ръчни дати / телефон)
+
+```
+PATCH /auth/users/{email}
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+Body (partial — само променените полета):
+{
+  "phone": "+359888123456",
+  "valid_from": "2026-07-08T10:00:00.000Z",
+  "valid_to": "2026-07-10T18:00:00.000Z"
+}
+
+Response (200): UserListItem
+```
+
+- `valid_from` / `valid_to` ↔ DB `active_from` / `active_to`
+- Email в URL трябва да е encoded (`user%40example.com`)
+
+### Бърз 24ч абонамент (Activate бутон)
+
+```
+POST /auth/users/{email}/activate
+Authorization: Bearer <admin_token>
+
+(без request body)
+
+Response (200): UserListItem
+```
+
+**Логика (backend):**
+- `valid_from` = сега (UTC)
+- `valid_to` = сега + 24 часа (UTC)
+- За admin UI — бързо плащане/активиране; за дълги периоди ползвай PATCH с ръчни дати
+
+**UI пример (fetch):**
+```javascript
+export async function activateUser(email, token) {
+  const encoded = encodeURIComponent(email);
+  const res = await fetch(`/auth/users/${encoded}/activate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+```
+
+---
+
+## PR: `feature/auth-navbar` (merged в UI `development`)
 
 ### Navbar & routing
 - Sticky navbar с единен стил за всички бутони (`.nav-btn`)
 - React Router: `/`, `/login`, `/register`, `/users`, `/contact`
 - Brand бутон **Arbitrage** винаги връща към `/` и нулира home състоянието
-- Vite proxy за `/auth` → `localhost:8000`
+- Vite proxy за `/auth` и `/arbitrage` → `localhost:8000`
 
 ### Role-based достъп
 | Роля | Видими бутони |
@@ -24,7 +104,7 @@
 | `admin` | Get data, Get current arbitrages, Audit, All users, Contact, Logout |
 
 ### Auth модул (`src/auth/`)
-- `api.js` — `register`, `login`, `fetchUsers`, `updateUser` (PATCH stub)
+- `api.js` — `register`, `login`, `fetchUsers`, `updateUser` (PATCH — wire to backend)
 - `token.js` — JWT parse, localStorage (`arbitrage_access_token`), expiry
 - `AuthContext.jsx` — session state, auto-logout при изтичане на токен
 - `types.js` — TypeScript-style JSDoc типове
@@ -36,98 +116,41 @@
 - **Contact** (`/contact`) — placeholder lorem ipsum (видим за всички)
 - **Home** (`/`) — hero изображение, arbitrage карти и audit view
 
-### Admin: редактиране на потребители (UI готов, backend pending)
-Inline редакция в таблицата:
-- **Телефон** — text input
-- **Valid from / Valid to** — inline календар + ръчен час (ЧЧ:ММ)
-
-**Pending endpoint:**
-```
-PATCH /auth/users/{email}
-Authorization: Bearer <admin_token>
-
-Body (partial — само променените полета):
-{
-  "phone": "+359888123456",
-  "valid_from": "2026-07-08T10:00:00.000Z",
-  "valid_to": "2026-07-10T18:00:00.000Z"
-}
-
-Response: UserListItem (email, phone, valid_from, valid_to)
-```
-
-### Нови файлове
-```
-public/home-hero.png
-src/auth/
-src/components/Navbar.jsx
-src/components/EditableUserField.jsx
-src/components/InlineDateTimePicker.jsx
-src/context/ArbitrageNavContext.jsx
-src/pages/HomePage.jsx
-src/pages/LoginPage.jsx
-src/pages/RegisterPage.jsx
-src/pages/UsersPage.jsx
-src/pages/ContactPage.jsx
-docs/CHANGELOG.md
-```
-
-### Зависимости
-- `react-router-dom` ^7.x
-
-### Backend изискване
-Auth endpoints са на branch `feature/auth-login-register` (не е merge-нат в `development` към момента на този UI PR).
+### Admin Users таблица (UI компоненти готови)
+- **Телефон** — text input (`EditableUserField`)
+- **Valid from / Valid to** — inline календар + ръчен час (`InlineDateTimePicker`)
+- **Activate 24h** — **не е имплементиран** (виж pending по-горе)
 
 ---
 
-## PR: `feature/audit-view` (merged в `development`)
+## PR: `feature/audit-view` (merged)
 
-### Промени
 - Бутон **Audit** в actions bar
 - `GET /arbitrage/v3/audit` — top 20 audit записи
-- Двуколонен layout без grid gaps (`splitIntoColumns`)
-- `AuditCard` компонент: rank, margin, match, market, legs, scrape date
-- Лилав accent стил за audit картите
-
-**Commit:** `6fa229c` — Add audit view with balanced two-column layout.
+- `AuditCard` компонент
 
 ---
 
-## PR: `feature/arbitrage-dashboard` (merged в `development`)
+## PR: `feature/arbitrage-dashboard` (merged)
 
-### Промени (натрупани commits)
-
-#### 1. Initial dashboard (`39dfafe`)
-- Vite + React 18 scaffold
-- `POST /arbitrage/v3/run` — scrape trigger
-- `GET /arbitrage/v3/top10` — top 10 arbitrage snapshot
-- `ArbCard` — match, market, kickoff, margin %, legs table
-- Vite proxy `/arbitrage` → backend
-- Dark theme UI
-
-#### 2. Stake calculator (`efb18f9`)
-- Input „Обща сума" на всяка карта
-- Автоматично изчисление на stake per leg (arbitrage split)
-- Read-only stake полета в legs table
-
-#### 3. Total return amount (`1e73c24`)
-- Показване на обща върната сума (budget + profit) до margin %
-
-#### 4. Audit view (`6fa229c`) — виж по-горе
+- Vite + React scaffold, dark theme
+- `POST /arbitrage/v3/run`, `GET /arbitrage/v3/top10`
+- `ArbCard` + stake calculator + total return amount
 
 ---
 
 ## API endpoints използвани от UI
 
-| Method | Path | Роля | Описание |
-|--------|------|------|----------|
-| `POST` | `/arbitrage/v3/run` | admin | Scrape + arbitrage |
-| `GET` | `/arbitrage/v3/top10` | client, admin | Top 10 snapshot |
-| `GET` | `/arbitrage/v3/audit` | client, admin | Audit top 20 |
-| `POST` | `/auth/register` | anonymous | Регистрация |
-| `POST` | `/auth/login` | anonymous | Login |
-| `GET` | `/auth/users` | admin | Списък потребители |
-| `PATCH` | `/auth/users/{email}` | admin | **Pending** — partial user update |
+| Method | Path | Роля | UI статус |
+|--------|------|------|-----------|
+| `POST` | `/arbitrage/v3/run` | admin | ✅ |
+| `GET` | `/arbitrage/v3/top10` | client, admin | ✅ |
+| `GET` | `/arbitrage/v3/audit` | client, admin | ✅ |
+| `POST` | `/auth/register` | anonymous | ✅ |
+| `POST` | `/auth/login` | anonymous | ✅ |
+| `GET` | `/auth/users` | admin | ✅ |
+| `PATCH` | `/auth/users/{email}` | admin | ⚠️ Wire `updateUser` |
+| `POST` | `/auth/users/{email}/activate` | admin | ❌ Pending — 24h бутон |
 
 ---
 
@@ -137,7 +160,8 @@ Auth endpoints са на branch `feature/auth-login-register` (не е merge-н�
 # Frontend
 npm run dev   # http://localhost:5173
 
-# Backend (auth branch)
+# Backend
+cd ../arbitrage && source .venv/bin/activate
 uvicorn api.main:app --reload --port 8000
 
 # Health
@@ -145,4 +169,8 @@ curl http://localhost:8000/health
 
 # Top 10
 curl http://localhost:8000/arbitrage/v3/top10
+
+# Activate 24h (admin)
+curl -X POST "http://localhost:8000/auth/users/user%40example.com/activate" \
+  -H "Authorization: Bearer <admin_token>"
 ```
