@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { activateUser, fetchUsers } from "../auth/api.js";
 import { getStoredToken } from "../auth/token.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { useUsersRefresh } from "../context/UsersRefreshContext.jsx";
 import EditableUserField from "../components/EditableUserField.jsx";
 import ReadOnlyUserField from "../components/ReadOnlyUserField.jsx";
 import { isAdminUser } from "../auth/userUtils.js";
@@ -12,7 +13,8 @@ import ActivateUserModal, {
 } from "../components/ActivateUserModal.jsx";
 
 export default function UsersPage() {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
+  const { refreshKey } = useUsersRefresh();
   const location = useLocation();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -36,9 +38,9 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    if (session.role !== "admin") return;
+    if (authLoading || session.role !== "admin") return;
     loadUsers();
-  }, [session.role, loadUsers, location.state?.refreshAt]);
+  }, [authLoading, session.role, loadUsers, refreshKey, location.pathname]);
 
   function handleUserUpdated(updatedUser) {
     setData((prev) => {
@@ -78,6 +80,14 @@ export default function UsersPage() {
     } finally {
       setActivating(false);
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="page">
+        <div className="message empty">Зареждане…</div>
+      </div>
+    );
   }
 
   if (session.role !== "admin") {
@@ -153,15 +163,24 @@ export default function UsersPage() {
                           onSaved={handleUserUpdated}
                         />
                       )}
-                      <EditableUserField
-                        email={user.email}
-                        field="valid_to"
-                        value={user.valid_to}
-                        label="Valid to"
-                        emptyHint="Задай крайна дата"
-                        mode="datetime"
-                        onSaved={handleUserUpdated}
-                      />
+                      {adminAccount ? (
+                        <ReadOnlyUserField
+                          label="Valid to"
+                          hint="Админ акаунт — крайната дата не се редактира"
+                          value={user.valid_to}
+                          mode="datetime"
+                        />
+                      ) : (
+                        <EditableUserField
+                          email={user.email}
+                          field="valid_to"
+                          value={user.valid_to}
+                          label="Valid to"
+                          emptyHint="Задай крайна дата"
+                          mode="datetime"
+                          onSaved={handleUserUpdated}
+                        />
+                      )}
                       <td className="users-action-cell">
                         {adminAccount ? (
                           <span className="users-na-badge" title="Админ акаунтите нямат абонамент">

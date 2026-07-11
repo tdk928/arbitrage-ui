@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext.jsx";
 import { ArbitrageNavProvider } from "./context/ArbitrageNavContext.jsx";
+import { UsersRefreshProvider } from "./context/UsersRefreshContext.jsx";
 import Navbar from "./components/Navbar.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -52,7 +53,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ArbitrageNavProvider>
-          <AppRoutes />
+          <UsersRefreshProvider>
+            <AppRoutes />
+          </UsersRefreshProvider>
         </ArbitrageNavProvider>
       </AuthProvider>
     </BrowserRouter>

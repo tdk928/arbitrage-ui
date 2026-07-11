@@ -28,7 +28,7 @@
 /**
  * @typedef {Object} UserListItem
  * @property {string} email
- * @property {"client" | "admin"} [role] — optional until backend ships it
+ * @property {"client" | "admin"} role
  * @property {string | null} phone
  * @property {string | null} valid_from
  * @property {string | null} valid_to

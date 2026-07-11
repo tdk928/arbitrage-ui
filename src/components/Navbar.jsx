@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useArbitrageNav } from "../context/ArbitrageNavContext.jsx";
+import { useUsersRefresh } from "../context/UsersRefreshContext.jsx";
 
 function NavGroup({ children }) {
   if (!children) return null;
@@ -27,6 +28,7 @@ function NavButton({ children, onClick, disabled, active }) {
 export default function Navbar() {
   const { session, logout } = useAuth();
   const { nav } = useArbitrageNav();
+  const { requestUsersRefresh } = useUsersRefresh();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -47,7 +49,10 @@ export default function Navbar() {
   }
 
   function goToUsers() {
-    navigate("/users", { state: { refreshAt: Date.now() } });
+    requestUsersRefresh();
+    if (location.pathname !== "/users") {
+      navigate("/users");
+    }
   }
 
   function goHome() {
