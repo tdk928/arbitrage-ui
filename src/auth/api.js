@@ -33,6 +33,21 @@ async function getJson(path, token) {
   return data;
 }
 
+async function postAuth(path, token) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "Request failed";
+    throw new Error(detail);
+  }
+
+  return data;
+}
+
 async function patchJson(path, token, body) {
   const response = await fetch(path, {
     method: "PATCH",
@@ -67,15 +82,6 @@ export function fetchUsers(token) {
 /**
  * PATCH /auth/users/{email}
  * Admin only. Partial update — send only fields to change.
- *
- * @example
- * updateUser(token, "user@example.com", { phone: "+359888123456" })
- * updateUser(token, "user@example.com", { valid_from: "2026-07-08T10:00:00.000Z" })
- * updateUser(token, "user@example.com", {
- *   phone: "+359888123456",
- *   valid_from: "2026-07-08T10:00:00.000Z",
- *   valid_to: "2026-07-10T18:00:00.000Z",
- * })
  */
 export function updateUser(token, email, patch) {
   const body = {};
@@ -84,4 +90,15 @@ export function updateUser(token, email, patch) {
   if ("valid_to" in patch) body.valid_to = patch.valid_to;
 
   return patchJson(`/auth/users/${encodeURIComponent(email)}`, token, body);
+}
+
+/**
+ * POST /auth/users/{email}/activate
+ * Admin only. Sets valid_from = now, valid_to = now + 24h (UTC).
+ */
+export function activateUser(token, email) {
+  return postAuth(
+    `/auth/users/${encodeURIComponent(email)}/activate`,
+    token
+  );
 }

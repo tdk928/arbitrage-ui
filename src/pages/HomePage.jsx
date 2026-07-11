@@ -1,10 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useArbitrageNav } from "../context/ArbitrageNavContext.jsx";
+import { useAuth } from "../auth/AuthContext.jsx";
+import { getStoredToken } from "../auth/token.js";
+import {
+  arbitrageItemKey,
+  deleteAuditEntry,
+  deleteTop10Entry,
+} from "../api/arbitrage.js";
+import DeleteArbitrageModal from "../components/DeleteArbitrageModal.jsx";
 
 const RUN_URL = "/arbitrage/v3/run";
 const TOP10_URL = "/arbitrage/v3/top10";
 const AUDIT_URL = "/arbitrage/v3/audit";
+
+/** Survives React StrictMode remount — prevents duplicate nav-triggered fetches. */
+let lastHandledArbitrageActionId = null;
 
 function calculateStakes(total, legs) {
   if (!total || total <= 0 || !legs?.length) return [];
@@ -39,7 +50,7 @@ function splitIntoColumns(items) {
   return [items.slice(0, mid), items.slice(mid)];
 }
 
-function ArbCard({ arb }) {
+function ArbCard({ arb, isAdmin, onDeleteRequest }) {
   const [totalStake, setTotalStake] = useState("");
   const kickoff = formatKickoff(arb.kickoff_utc);
   const legs = arb.legs || [];
@@ -72,6 +83,16 @@ function ArbCard({ arb }) {
           </div>
         </div>
         <div className="margin">
+          {isAdmin && (
+            <button
+              type="button"
+              className="arb-delete-btn"
+              onClick={() => onDeleteRequest?.(arb, "top10")}
+              title="Изтрий арбитраж"
+            >
+              Delete
+            </button>
+          )}
           <label className="stake-input-wrap">
             <span className="stake-input-label">Обща сума</span>
             <input
@@ -128,7 +149,7 @@ function ArbCard({ arb }) {
   );
 }
 
-function AuditCard({ item }) {
+function AuditCard({ item, isAdmin, onDeleteRequest }) {
   const kickoff = formatKickoff(item.kickoff_utc);
   const legs = item.legs || [];
 
@@ -136,8 +157,20 @@ function AuditCard({ item }) {
     <article className="audit-card">
       <div className="audit-card-header">
         <span className="audit-rank">#{item.rank}</span>
-        <div className="audit-margin">
-          +{Number(item.margin_pct).toFixed(2)}%
+        <div className="audit-card-header-right">
+          <div className="audit-margin">
+            +{Number(item.margin_pct).toFixed(2)}%
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              className="arb-delete-btn"
+              onClick={() => onDeleteRequest?.(item, "audit")}
+              title="Изтрий от audit"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
 
@@ -185,7 +218,7 @@ function AuditCard({ item }) {
   );
 }
 
-function AuditView({ items }) {
+function AuditView({ items, isAdmin, onDeleteRequest }) {
   const [leftCol, rightCol] = useMemo(
     () => splitIntoColumns(items),
     [items]
@@ -206,6 +239,8 @@ function AuditView({ items }) {
             <AuditCard
               key={`${item.run_id}-${item.rank}-${item.rule_slug}`}
               item={item}
+              isAdmin={isAdmin}
+              onDeleteRequest={onDeleteRequest}
             />
           ))}
         </div>
@@ -214,6 +249,8 @@ function AuditView({ items }) {
             <AuditCard
               key={`${item.run_id}-${item.rank}-${item.rule_slug}`}
               item={item}
+              isAdmin={isAdmin}
+              onDeleteRequest={onDeleteRequest}
             />
           ))}
         </div>
@@ -223,6 +260,8 @@ function AuditView({ items }) {
 }
 
 export default function HomePage() {
+  const { session } = useAuth();
+  const isAdmin = session.role === "admin";
   const { setNav } = useArbitrageNav();
   const location = useLocation();
   const navigate = useNavigate();
@@ -233,8 +272,14 @@ export default function HomePage() {
   const [audit, setAudit] = useState(null);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
+  const inFlightRef = useRef(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   async function runScrape() {
+    if (inFlightRef.current) return;
+    inFlightRef.current = "run";
     setLoading("run");
     setError(null);
     setInfo(null);
@@ -251,10 +296,13 @@ export default function HomePage() {
       setError(`Грешка при скрапване: ${e.message}`);
     } finally {
       setLoading(null);
+      inFlightRef.current = null;
     }
   }
 
   async function fetchTop10() {
+    if (inFlightRef.current) return;
+    inFlightRef.current = "top10";
     setLoading("top10");
     setError(null);
     setInfo(null);
@@ -270,10 +318,13 @@ export default function HomePage() {
       setError(`Грешка при зареждане: ${e.message}`);
     } finally {
       setLoading(null);
+      inFlightRef.current = null;
     }
   }
 
   async function fetchAudit() {
+    if (inFlightRef.current) return;
+    inFlightRef.current = "audit";
     setLoading("audit");
     setError(null);
     setInfo(null);
@@ -288,6 +339,7 @@ export default function HomePage() {
       setError(`Грешка при зареждане на audit: ${e.message}`);
     } finally {
       setLoading(null);
+      inFlightRef.current = null;
     }
   }
 
@@ -317,14 +369,57 @@ export default function HomePage() {
 
   useEffect(() => {
     const action = location.state?.arbitrageAction;
-    if (!action) return;
+    const actionId = location.state?.actionId;
+    if (!action || actionId == null) return;
+    if (lastHandledArbitrageActionId === actionId) return;
 
+    lastHandledArbitrageActionId = actionId;
     navigate(".", { replace: true, state: {} });
 
     if (action === "run") runScrape();
     if (action === "top10") fetchTop10();
     if (action === "audit") fetchAudit();
-  }, [location.state]);
+  }, [location.state?.arbitrageAction, location.state?.actionId]);
+
+  function openDeleteModal(item, source) {
+    setDeleteError(null);
+    setDeleteTarget({ item, source });
+  }
+
+  function closeDeleteModal() {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+
+    const { item, source } = deleteTarget;
+    const token = getStoredToken();
+    const key = arbitrageItemKey(item, source);
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      if (source === "audit") {
+        await deleteAuditEntry(token, item);
+        setAudit((prev) =>
+          prev?.filter((row) => arbitrageItemKey(row, "audit") !== key) ?? null
+        );
+      } else {
+        await deleteTop10Entry(token, item.rank);
+        setArbs((prev) =>
+          prev?.filter((row) => arbitrageItemKey(row, "top10") !== key) ?? null
+        );
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err.message || "Грешка при изтриване");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const showEmptyArbs = view === "arbs" && arbs !== null && arbs.length === 0;
   const showEmptyAudit = view === "audit" && audit !== null && audit.length === 0;
@@ -361,14 +456,32 @@ export default function HomePage() {
       {view === "arbs" && arbs !== null && arbs.length > 0 && (
         <div className="cards">
           {arbs.map((arb, i) => (
-            <ArbCard key={i} arb={arb} />
+            <ArbCard
+              key={i}
+              arb={arb}
+              isAdmin={isAdmin}
+              onDeleteRequest={openDeleteModal}
+            />
           ))}
         </div>
       )}
 
       {view === "audit" && audit !== null && audit.length > 0 && (
-        <AuditView items={audit} />
+        <AuditView
+          items={audit}
+          isAdmin={isAdmin}
+          onDeleteRequest={openDeleteModal}
+        />
       )}
+
+      <DeleteArbitrageModal
+        item={deleteTarget?.item ?? null}
+        source={deleteTarget?.source ?? "audit"}
+        saving={deleting}
+        error={deleteError}
+        onConfirm={handleConfirmDelete}
+        onCancel={closeDeleteModal}
+      />
     </div>
   );
 }

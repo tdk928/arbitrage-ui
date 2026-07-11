@@ -41,14 +41,13 @@ export default function Navbar() {
   const arbSource = nav.arbSource;
 
   function triggerArbitrage(action) {
-    if (location.pathname !== "/") {
-      navigate("/", { state: { arbitrageAction: action } });
-      return;
-    }
+    navigate("/", {
+      state: { arbitrageAction: action, actionId: Date.now() },
+    });
+  }
 
-    if (action === "run") nav.onRunScrape?.();
-    if (action === "top10") nav.onFetchTop10?.();
-    if (action === "audit") nav.onFetchAudit?.();
+  function goToUsers() {
+    navigate("/users", { state: { refreshAt: Date.now() } });
   }
 
   function goHome() {
@@ -137,7 +136,7 @@ export default function Navbar() {
 
             {isAdmin && (
               <NavButton
-                onClick={() => navigate("/users")}
+                onClick={goToUsers}
                 active={location.pathname === "/users"}
               >
                 All users

@@ -28,9 +28,9 @@
 
 ### UI pending (следваща работа)
 
-1. **`src/auth/api.js`** — wire `updateUser` към `PATCH /auth/users/{email}` (вече не е stub)
-2. **`src/auth/api.js`** — добави `activateUser(email)` → `POST /auth/users/{email}/activate` (без body)
-3. **`UsersPage`** — бутон „Activate 24h“ per row, вика `activateUser`, refresh таблицата
+1. ~~**`src/auth/api.js`** — wire `updateUser` към `PATCH /auth/users/{email}`~~ ✅
+2. ~~**`src/auth/api.js`** — добави `activateUser(email)` → `POST /auth/users/{email}/activate`~~ ✅
+3. ~~**`UsersPage`** — бутон „Activate 24h“ per row + confirm modal~~ ✅
 4. JWT `has_active_subscription` — client features да го ползват след activate (re-login или refresh token flow)
 
 ---
@@ -146,11 +146,13 @@ export async function activateUser(email, token) {
 | `POST` | `/arbitrage/v3/run` | admin | ✅ |
 | `GET` | `/arbitrage/v3/top10` | client, admin | ✅ |
 | `GET` | `/arbitrage/v3/audit` | client, admin | ✅ |
+| `DELETE` | `/arbitrage/v3/audit` | admin | ✅ |
+| `DELETE` | `/arbitrage/v3/top10/{rank}` | admin | ✅ |
 | `POST` | `/auth/register` | anonymous | ✅ |
 | `POST` | `/auth/login` | anonymous | ✅ |
 | `GET` | `/auth/users` | admin | ✅ |
-| `PATCH` | `/auth/users/{email}` | admin | ⚠️ Wire `updateUser` |
-| `POST` | `/auth/users/{email}/activate` | admin | ❌ Pending — 24h бутон |
+| `PATCH` | `/auth/users/{email}` | admin | ✅ |
+| `POST` | `/auth/users/{email}/activate` | admin | ✅ Activate 24h + confirm modal |
 
 ---
 
