@@ -51,7 +51,7 @@ export default function LoginPage() {
           </label>
           {error && <div className="message error">{error}</div>}
           <button type="submit" className="auth-submit" disabled={submitting}>
-            {submitting ? "Влизане…" : "Login"}
+            {submitting ? "Влизане…" : "Вход"}
           </button>
         </form>
         <p className="auth-footer">

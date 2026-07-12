@@ -3,11 +3,13 @@ import { AuthProvider, useAuth } from "./auth/AuthContext.jsx";
 import { ArbitrageNavProvider } from "./context/ArbitrageNavContext.jsx";
 import { UsersRefreshProvider } from "./context/UsersRefreshContext.jsx";
 import Navbar from "./components/Navbar.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import RegisterPage from "./pages/RegisterPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 import ContactPage from "./pages/ContactPage.jsx";
+import AccessDeniedPage from "./pages/AccessDeniedPage.jsx";
 
 function GuestOnlyRoute({ children }) {
   const { session, loading } = useAuth();
@@ -23,7 +25,14 @@ function AppRoutes() {
     <>
       <Navbar />
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute requireSubscription>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/login"
           element={
@@ -40,8 +49,16 @@ function AppRoutes() {
             </GuestOnlyRoute>
           }
         />
-        <Route path="/users" element={<UsersPage />} />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute requireAdmin>
+              <UsersPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/access-denied" element={<AccessDeniedPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useArbitrageNav } from "../context/ArbitrageNavContext.jsx";
@@ -31,6 +32,7 @@ export default function Navbar() {
   const { requestUsersRefresh } = useUsersRefresh();
   const navigate = useNavigate();
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const { role } = session;
   const isAnonymous = role === "anonymous";
@@ -42,13 +44,30 @@ export default function Navbar() {
   const view = nav.view;
   const arbSource = nav.arbSource;
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
   function triggerArbitrage(action) {
+    closeMenu();
     navigate("/", {
       state: { arbitrageAction: action, actionId: Date.now() },
     });
   }
 
   function goToUsers() {
+    closeMenu();
     requestUsersRefresh();
     if (location.pathname !== "/users") {
       navigate("/users");
@@ -56,27 +75,44 @@ export default function Navbar() {
   }
 
   function goHome() {
+    closeMenu();
     navigate("/", { replace: true, state: { resetHome: true } });
   }
 
   function handleLogout() {
+    closeMenu();
     logout();
     navigate("/", { replace: true });
+  }
+
+  function goTo(path) {
+    closeMenu();
+    navigate(path);
   }
 
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <button
-          type="button"
-          className="navbar-brand"
-          onClick={goHome}
-        >
-          <span className="navbar-logo">A</span>
-          <span className="navbar-title">Arbitrage</span>
-        </button>
+        <div className="navbar-top-row">
+          <button type="button" className="navbar-brand" onClick={goHome}>
+            <span className="navbar-logo">A</span>
+            <span className="navbar-title">Arbitrage</span>
+          </button>
 
-        <nav className="navbar-nav">
+          <button
+            type="button"
+            className={`navbar-toggle${menuOpen ? " navbar-toggle-open" : ""}`}
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Затвори меню" : "Отвори меню"}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        </div>
+
+        <nav className={`navbar-nav${menuOpen ? " navbar-nav-open" : ""}`}>
           {canSeeArbitrage && (
             <>
               <NavGroup>
@@ -84,38 +120,44 @@ export default function Navbar() {
                   <NavButton
                     onClick={() => triggerArbitrage("run")}
                     disabled={loading !== null}
-                    active={location.pathname === "/" && view === "arbs" && arbSource === "run"}
+                    active={
+                      location.pathname === "/" &&
+                      view === "arbs" &&
+                      arbSource === "run"
+                    }
                   >
-                    {loading === "run" ? "Скрапване…" : "Get data"}
+                    {loading === "run" ? "Скрапване…" : "Скрапни данни"}
                   </NavButton>
                 )}
                 <NavButton
                   onClick={() => triggerArbitrage("top10")}
                   disabled={loading !== null}
-                  active={location.pathname === "/" && view === "arbs" && arbSource === "top10"}
+                  active={
+                    location.pathname === "/" &&
+                    view === "arbs" &&
+                    arbSource === "top10"
+                  }
                 >
-                  {loading === "top10" ? "Зареждане…" : "Get current arbitrages"}
+                  {loading === "top10" ? "Зареждане…" : "Текущи арбитражи"}
                 </NavButton>
                 <NavButton
                   onClick={() => triggerArbitrage("audit")}
                   disabled={loading !== null}
                   active={location.pathname === "/" && view === "audit"}
                 >
-                  {loading === "audit" ? "Зареждане…" : "Audit"}
+                  {loading === "audit" ? "Зареждане…" : "История на арбитражите"}
                 </NavButton>
               </NavGroup>
               <div className="nav-divider" aria-hidden="true" />
             </>
           )}
 
-          <div className="nav-divider" aria-hidden="true" />
-
           <NavGroup>
             <NavButton
-              onClick={() => navigate("/contact")}
+              onClick={() => goTo("/contact")}
               active={location.pathname === "/contact"}
             >
-              Contact
+              Контакти
             </NavButton>
           </NavGroup>
 
@@ -125,16 +167,16 @@ export default function Navbar() {
             {isAnonymous && (
               <>
                 <NavButton
-                  onClick={() => navigate("/login")}
+                  onClick={() => goTo("/login")}
                   active={location.pathname === "/login"}
                 >
-                  Login
+                  Вход
                 </NavButton>
                 <NavButton
-                  onClick={() => navigate("/register")}
+                  onClick={() => goTo("/register")}
                   active={location.pathname === "/register"}
                 >
-                  Register
+                  Регистрация
                 </NavButton>
               </>
             )}
@@ -144,16 +186,25 @@ export default function Navbar() {
                 onClick={goToUsers}
                 active={location.pathname === "/users"}
               >
-                All users
+                Потребители
               </NavButton>
             )}
 
             {!isAnonymous && (
-              <NavButton onClick={handleLogout}>Logout</NavButton>
+              <NavButton onClick={handleLogout}>Изход</NavButton>
             )}
           </NavGroup>
         </nav>
       </div>
+
+      {menuOpen && (
+        <button
+          type="button"
+          className="navbar-backdrop"
+          aria-label="Затвори меню"
+          onClick={closeMenu}
+        />
+      )}
     </header>
   );
 }

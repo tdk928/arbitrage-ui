@@ -3,16 +3,16 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useArbitrageNav } from "../context/ArbitrageNavContext.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { getStoredToken } from "../auth/token.js";
+import { accessDeniedPathForError } from "../auth/handleApiError.js";
 import {
   arbitrageItemKey,
   deleteAuditEntry,
   deleteTop10Entry,
+  fetchAudit,
+  fetchTop10,
+  runScrape,
 } from "../api/arbitrage.js";
 import DeleteArbitrageModal from "../components/DeleteArbitrageModal.jsx";
-
-const RUN_URL = "/arbitrage/v3/run";
-const TOP10_URL = "/arbitrage/v3/top10";
-const AUDIT_URL = "/arbitrage/v3/audit";
 
 /** Survives React StrictMode remount — prevents duplicate nav-triggered fetches. */
 let lastHandledArbitrageActionId = null;
@@ -45,9 +45,11 @@ function formatScrapeDate(dateStr) {
   return `${d}.${m}.${y}`;
 }
 
-function splitIntoColumns(items) {
-  const mid = Math.ceil(items.length / 2);
-  return [items.slice(0, mid), items.slice(mid)];
+function splitIntoColumns(items, columnCount = 3) {
+  const size = Math.ceil(items.length / columnCount);
+  return Array.from({ length: columnCount }, (_, i) =>
+    items.slice(i * size, (i + 1) * size)
+  );
 }
 
 function ArbCard({ arb, isAdmin, onDeleteRequest }) {
@@ -65,34 +67,43 @@ function ArbCard({ arb, isAdmin, onDeleteRequest }) {
       : null;
 
   function handleStakeInput(e) {
-    setTotalStake(e.target.value.replace(/\D/g, ""));
+    setTotalStake(e.target.value.replace(/\D/g, "").slice(0, 8));
+  }
+
+  function formatMoney(value) {
+    if (!Number.isFinite(value)) return "";
+    return value.toLocaleString("bg-BG", {
+      maximumFractionDigits: 2,
+    });
   }
 
   return (
     <div className="card">
+      <div className="card-header-bar">
+        <div className="match">
+          {arb.home_team && arb.away_team
+            ? `${arb.home_team} — ${arb.away_team}`
+            : arb.match}
+        </div>
+        {isAdmin && (
+          <button
+            type="button"
+            className="arb-delete-btn"
+            onClick={() => onDeleteRequest?.(arb, "top10")}
+            title="Изтрий арбитраж"
+          >
+            Изтрий
+          </button>
+        )}
+      </div>
+
+      <span className="market">{arb.market}</span>
+
       <div className="card-top">
-        <div>
-          <div className="match">
-            {arb.home_team && arb.away_team
-              ? `${arb.home_team} — ${arb.away_team}`
-              : arb.match}
-          </div>
-          <div className="meta">
-            <span className="market">{arb.market}</span>
-            {kickoff && <span className="kickoff">{kickoff}</span>}
-          </div>
+        <div className="card-info">
+          {kickoff && <span className="kickoff">Начало - {kickoff}</span>}
         </div>
         <div className="margin">
-          {isAdmin && (
-            <button
-              type="button"
-              className="arb-delete-btn"
-              onClick={() => onDeleteRequest?.(arb, "top10")}
-              title="Изтрий арбитраж"
-            >
-              Delete
-            </button>
-          )}
           <label className="stake-input-wrap">
             <span className="stake-input-label">Обща сума</span>
             <input
@@ -105,10 +116,12 @@ function ArbCard({ arb, isAdmin, onDeleteRequest }) {
             />
           </label>
           <div className="margin-value">
-            +{Number(arb.margin_pct).toFixed(2)}%
+            <span className="margin-pct">
+              +{Number(arb.margin_pct).toFixed(2)}%
+            </span>
             {profitAmount !== null && (
-              <span className="margin-amount">
-                {(budget + profitAmount).toFixed(2)}
+              <span className="margin-amount" title={formatMoney(budget + profitAmount)}>
+                {formatMoney(budget + profitAmount)}
               </span>
             )}
             <span className="margin-label">печалба</span>
@@ -128,18 +141,20 @@ function ArbCard({ arb, isAdmin, onDeleteRequest }) {
         <tbody>
           {legs.map((leg, i) => (
             <tr key={i}>
-              <td className="bookmaker">{leg.bookmaker}</td>
-              <td>{leg.outcome}</td>
-              <td className="odd">{Number(leg.odd).toFixed(2)}</td>
-              <td>
-                <input
-                  type="text"
+              <td className="bookmaker" data-label="Букмейкър">
+                {leg.bookmaker}
+              </td>
+              <td data-label="Залог">{leg.outcome}</td>
+              <td className="odd" data-label="Коефициент">
+                {Number(leg.odd).toFixed(2)}
+              </td>
+              <td data-label="Сума">
+                <span
                   className="stake-readonly"
-                  readOnly
-                  tabIndex={-1}
-                  value={budget > 0 ? stakes[i].toFixed(2) : ""}
-                  placeholder="—"
-                />
+                  title={budget > 0 ? formatMoney(stakes[i]) : undefined}
+                >
+                  {budget > 0 ? formatMoney(stakes[i]) : "—"}
+                </span>
               </td>
             </tr>
           ))}
@@ -156,7 +171,6 @@ function AuditCard({ item, isAdmin, onDeleteRequest }) {
   return (
     <article className="audit-card">
       <div className="audit-card-header">
-        <span className="audit-rank">#{item.rank}</span>
         <div className="audit-card-header-right">
           <div className="audit-margin">
             +{Number(item.margin_pct).toFixed(2)}%
@@ -168,7 +182,7 @@ function AuditCard({ item, isAdmin, onDeleteRequest }) {
               onClick={() => onDeleteRequest?.(item, "audit")}
               title="Изтрий от audit"
             >
-              Delete
+              Изтрий
             </button>
           )}
         </div>
@@ -189,14 +203,6 @@ function AuditCard({ item, isAdmin, onDeleteRequest }) {
             {kickoff}
           </span>
         )}
-        <span className="audit-tag">
-          <span className="audit-tag-label">Букмейкъри</span>
-          {item.bookmaker_count}
-        </span>
-        <span className="audit-tag audit-tag-muted">
-          <span className="audit-tag-label">Run</span>
-          #{item.run_id}
-        </span>
         {item.scrape_date && (
           <span className="audit-tag audit-tag-muted">
             <span className="audit-tag-label">Скрап</span>
@@ -219,41 +225,23 @@ function AuditCard({ item, isAdmin, onDeleteRequest }) {
 }
 
 function AuditView({ items, isAdmin, onDeleteRequest }) {
-  const [leftCol, rightCol] = useMemo(
-    () => splitIntoColumns(items),
-    [items]
-  );
+  const columns = useMemo(() => splitIntoColumns(items, 3), [items]);
 
   return (
     <div className="audit-view">
-      <div className="audit-summary">
-        <span className="audit-summary-count">{items.length}</span>
-        <span className="audit-summary-label">
-          записа в audit историята
-        </span>
-      </div>
-
       <div className="audit-columns">
-        <div className="audit-col">
-          {leftCol.map((item) => (
-            <AuditCard
-              key={`${item.run_id}-${item.rank}-${item.rule_slug}`}
-              item={item}
-              isAdmin={isAdmin}
-              onDeleteRequest={onDeleteRequest}
-            />
-          ))}
-        </div>
-        <div className="audit-col">
-          {rightCol.map((item) => (
-            <AuditCard
-              key={`${item.run_id}-${item.rank}-${item.rule_slug}`}
-              item={item}
-              isAdmin={isAdmin}
-              onDeleteRequest={onDeleteRequest}
-            />
-          ))}
-        </div>
+        {columns.map((colItems, colIndex) => (
+          <div className="audit-col" key={colIndex}>
+            {colItems.map((item) => (
+              <AuditCard
+                key={`${item.run_id}-${item.rank}-${item.rule_slug}`}
+                item={item}
+                isAdmin={isAdmin}
+                onDeleteRequest={onDeleteRequest}
+              />
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -277,66 +265,78 @@ export default function HomePage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  async function runScrape() {
+  function handleProtectedApiError(error) {
+    const redirect = accessDeniedPathForError(error);
+    if (redirect) {
+      navigate(redirect.pathname, { replace: true, state: redirect.state });
+      return true;
+    }
+    return false;
+  }
+
+  async function handleRunScrape() {
     if (inFlightRef.current) return;
     inFlightRef.current = "run";
     setLoading("run");
     setError(null);
     setInfo(null);
     try {
-      const res = await fetch(RUN_URL, { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const token = getStoredToken();
+      const data = await runScrape(token);
       setArbs(data.top10 || []);
       setAudit(null);
       setView("arbs");
       setArbSource("run");
       setInfo(`Скрапът приключи (run #${data.run_id}, статус: ${data.status}).`);
     } catch (e) {
-      setError(`Грешка при скрапване: ${e.message}`);
+      if (!handleProtectedApiError(e)) {
+        setError(`Грешка при скрапване: ${e.message}`);
+      }
     } finally {
       setLoading(null);
       inFlightRef.current = null;
     }
   }
 
-  async function fetchTop10() {
+  async function handleFetchTop10() {
     if (inFlightRef.current) return;
     inFlightRef.current = "top10";
     setLoading("top10");
     setError(null);
     setInfo(null);
     try {
-      const res = await fetch(TOP10_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const token = getStoredToken();
+      const data = await fetchTop10(token);
       setArbs(data);
       setAudit(null);
       setView("arbs");
       setArbSource("top10");
     } catch (e) {
-      setError(`Грешка при зареждане: ${e.message}`);
+      if (!handleProtectedApiError(e)) {
+        setError(`Грешка при зареждане: ${e.message}`);
+      }
     } finally {
       setLoading(null);
       inFlightRef.current = null;
     }
   }
 
-  async function fetchAudit() {
+  async function handleFetchAudit() {
     if (inFlightRef.current) return;
     inFlightRef.current = "audit";
     setLoading("audit");
     setError(null);
     setInfo(null);
     try {
-      const res = await fetch(AUDIT_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const token = getStoredToken();
+      const data = await fetchAudit(token);
       setAudit(data);
       setArbs(null);
       setView("audit");
     } catch (e) {
-      setError(`Грешка при зареждане на audit: ${e.message}`);
+      if (!handleProtectedApiError(e)) {
+        setError(`Грешка при зареждане на audit: ${e.message}`);
+      }
     } finally {
       setLoading(null);
       inFlightRef.current = null;
@@ -361,9 +361,9 @@ export default function HomePage() {
       loading,
       view,
       arbSource,
-      onRunScrape: runScrape,
-      onFetchTop10: fetchTop10,
-      onFetchAudit: fetchAudit,
+      onRunScrape: handleRunScrape,
+      onFetchTop10: handleFetchTop10,
+      onFetchAudit: handleFetchAudit,
     });
   }, [loading, view, arbSource, setNav]);
 
@@ -376,9 +376,9 @@ export default function HomePage() {
     lastHandledArbitrageActionId = actionId;
     navigate(".", { replace: true, state: {} });
 
-    if (action === "run") runScrape();
-    if (action === "top10") fetchTop10();
-    if (action === "audit") fetchAudit();
+    if (action === "run") handleRunScrape();
+    if (action === "top10") handleFetchTop10();
+    if (action === "audit") handleFetchAudit();
   }, [location.state?.arbitrageAction, location.state?.actionId]);
 
   function openDeleteModal(item, source) {
@@ -415,7 +415,9 @@ export default function HomePage() {
       }
       setDeleteTarget(null);
     } catch (err) {
-      setDeleteError(err.message || "Грешка при изтриване");
+      if (!handleProtectedApiError(err)) {
+        setDeleteError(err.message || "Грешка при изтриване");
+      }
     } finally {
       setDeleting(false);
     }

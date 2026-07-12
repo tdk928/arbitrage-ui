@@ -1,3 +1,5 @@
+import { authHeaders, readJsonResponse } from "../api/http.js";
+
 async function postJson(path, body) {
   const response = await fetch(path, {
     method: "POST",
@@ -5,47 +7,24 @@ async function postJson(path, body) {
     body: JSON.stringify(body),
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail =
-      typeof data.detail === "string"
-        ? data.detail
-        : Array.isArray(data.detail)
-          ? data.detail.map((e) => e.msg).join(", ")
-          : "Request failed";
-    throw new Error(detail);
-  }
-
-  return data;
+  return readJsonResponse(response);
 }
 
 async function getJson(path, token) {
   const response = await fetch(path, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : "Request failed";
-    throw new Error(detail);
-  }
-
-  return data;
+  return readJsonResponse(response);
 }
 
 async function postAuth(path, token) {
   const response = await fetch(path, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : "Request failed";
-    throw new Error(detail);
-  }
-
-  return data;
+  return readJsonResponse(response);
 }
 
 async function patchJson(path, token, body) {
@@ -53,18 +32,12 @@ async function patchJson(path, token, body) {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...authHeaders(token),
     },
     body: JSON.stringify(body),
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : "Request failed";
-    throw new Error(detail);
-  }
-
-  return data;
+  return readJsonResponse(response);
 }
 
 export function register(email, password) {
@@ -99,6 +72,17 @@ export function updateUser(token, email, patch) {
 export function activateUser(token, email) {
   return postAuth(
     `/auth/users/${encodeURIComponent(email)}/activate`,
+    token
+  );
+}
+
+/**
+ * POST /auth/users/{email}/deactivate
+ * Admin only. Clears valid_from & valid_to (sets both to null in DB).
+ */
+export function deactivateUser(token, email) {
+  return postAuth(
+    `/auth/users/${encodeURIComponent(email)}/deactivate`,
     token
   );
 }

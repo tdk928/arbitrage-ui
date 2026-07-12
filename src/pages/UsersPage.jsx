@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { activateUser, fetchUsers } from "../auth/api.js";
+import { useLocation, useNavigate } from "react-router-dom";
+import { activateUser, deactivateUser, fetchUsers } from "../auth/api.js";
+import { accessDeniedPathForError } from "../auth/handleApiError.js";
 import { getStoredToken } from "../auth/token.js";
-import { useAuth } from "../auth/AuthContext.jsx";
 import { useUsersRefresh } from "../context/UsersRefreshContext.jsx";
 import EditableUserField from "../components/EditableUserField.jsx";
 import ReadOnlyUserField from "../components/ReadOnlyUserField.jsx";
@@ -11,17 +11,23 @@ import ActivateUserModal, {
   isSubscriptionActive,
   formatSubscriptionEnd,
 } from "../components/ActivateUserModal.jsx";
+import DeactivateUserModal, {
+  hasSubscriptionDates,
+} from "../components/DeactivateUserModal.jsx";
 
 export default function UsersPage() {
-  const { session, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const { refreshKey } = useUsersRefresh();
   const location = useLocation();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmEmail, setConfirmEmail] = useState(null);
+  const [deactivateEmail, setDeactivateEmail] = useState(null);
   const [activateError, setActivateError] = useState(null);
+  const [deactivateError, setDeactivateError] = useState(null);
   const [activating, setActivating] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -31,16 +37,20 @@ export default function UsersPage() {
       const result = await fetchUsers(token);
       setData(result);
     } catch (err) {
+      const redirect = accessDeniedPathForError(err);
+      if (redirect) {
+        navigate(redirect.pathname, { replace: true, state: redirect.state });
+        return;
+      }
       setError(err.message || "Грешка при зареждане");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    if (authLoading || session.role !== "admin") return;
     loadUsers();
-  }, [authLoading, session.role, loadUsers, refreshKey, location.pathname]);
+  }, [loadUsers, refreshKey, location.pathname]);
 
   function handleUserUpdated(updatedUser) {
     setData((prev) => {
@@ -65,6 +75,17 @@ export default function UsersPage() {
     setActivateError(null);
   }
 
+  function openDeactivateModal(email) {
+    setDeactivateError(null);
+    setDeactivateEmail(email);
+  }
+
+  function closeDeactivateModal() {
+    if (deactivating) return;
+    setDeactivateEmail(null);
+    setDeactivateError(null);
+  }
+
   async function handleConfirmActivate() {
     if (!confirmEmail) return;
 
@@ -82,16 +103,21 @@ export default function UsersPage() {
     }
   }
 
-  if (authLoading) {
-    return (
-      <div className="page">
-        <div className="message empty">Зареждане…</div>
-      </div>
-    );
-  }
+  async function handleConfirmDeactivate() {
+    if (!deactivateEmail) return;
 
-  if (session.role !== "admin") {
-    return <Navigate to="/" replace />;
+    setDeactivating(true);
+    setDeactivateError(null);
+    try {
+      const token = getStoredToken();
+      const updated = await deactivateUser(token, deactivateEmail);
+      handleUserUpdated(updated);
+      setDeactivateEmail(null);
+    } catch (err) {
+      setDeactivateError(err.message || "Грешка при деактивиране");
+    } finally {
+      setDeactivating(false);
+    }
   }
 
   return (
@@ -129,6 +155,7 @@ export default function UsersPage() {
                 data.users.map((user) => {
                   const active = isSubscriptionActive(user);
                   const adminAccount = isAdminUser(user);
+                  const hasDates = hasSubscriptionDates(user);
                   return (
                     <tr key={user.email}>
                       <td className="users-email-cell">
@@ -186,18 +213,35 @@ export default function UsersPage() {
                           <span className="users-na-badge" title="Админ акаунтите нямат абонамент">
                             N/A
                           </span>
-                        ) : active ? (
-                          <span className="users-active-badge" title={`До ${formatSubscriptionEnd(user.valid_to)}`}>
-                            Активен
-                          </span>
                         ) : (
-                          <button
-                            type="button"
-                            className="users-activate-btn"
-                            onClick={() => openActivateModal(user.email)}
-                          >
-                            Activate 24h
-                          </button>
+                          <div className="users-action-group">
+                            {active && (
+                              <span
+                                className="users-active-badge"
+                                title={`До ${formatSubscriptionEnd(user.valid_to)}`}
+                              >
+                                Активен
+                              </span>
+                            )}
+                            {!active && (
+                              <button
+                                type="button"
+                                className="users-activate-btn"
+                                onClick={() => openActivateModal(user.email)}
+                              >
+                                Активирай 24ч
+                              </button>
+                            )}
+                            {hasDates && (
+                              <button
+                                type="button"
+                                className="users-deactivate-btn"
+                                onClick={() => openDeactivateModal(user.email)}
+                              >
+                                Деактивирай
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -215,6 +259,14 @@ export default function UsersPage() {
         error={activateError}
         onConfirm={handleConfirmActivate}
         onCancel={closeActivateModal}
+      />
+
+      <DeactivateUserModal
+        email={deactivateEmail}
+        saving={deactivating}
+        error={deactivateError}
+        onConfirm={handleConfirmDeactivate}
+        onCancel={closeDeactivateModal}
       />
     </div>
   );

@@ -58,7 +58,7 @@ export default function RegisterPage() {
           </label>
           {error && <div className="message error">{error}</div>}
           <button type="submit" className="auth-submit" disabled={submitting}>
-            {submitting ? "Регистрация…" : "Register"}
+            {submitting ? "Регистрация…" : "Регистрация"}
           </button>
         </form>
         <p className="auth-footer">

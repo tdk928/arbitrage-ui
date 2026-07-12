@@ -1,39 +1,62 @@
 import { getStoredToken } from "../auth/token.js";
+import { authHeaders, readJsonResponse } from "./http.js";
+
+/**
+ * GET /arbitrage/v3/top10
+ * Requires subscribed client or admin JWT.
+ */
+export function fetchTop10(token = getStoredToken()) {
+  if (!token) throw new Error("Not authenticated");
+  return fetch("/arbitrage/v3/top10", { headers: authHeaders(token) }).then(
+    readJsonResponse
+  );
+}
+
+/**
+ * GET /arbitrage/v3/audit
+ * Requires subscribed client or admin JWT.
+ */
+export function fetchAudit(token = getStoredToken()) {
+  if (!token) throw new Error("Not authenticated");
+  return fetch("/arbitrage/v3/audit", { headers: authHeaders(token) }).then(
+    readJsonResponse
+  );
+}
+
+/**
+ * POST /arbitrage/v3/run
+ * Requires subscribed client or admin JWT.
+ */
+export function runScrape(token = getStoredToken()) {
+  if (!token) throw new Error("Not authenticated");
+  return fetch("/arbitrage/v3/run", {
+    method: "POST",
+    headers: authHeaders(token),
+  }).then(readJsonResponse);
+}
 
 async function deleteJson(path, token, body) {
   const response = await fetch(path, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...authHeaders(token),
     },
     body: JSON.stringify(body),
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : "Request failed";
-    throw new Error(detail);
-  }
-
-  return data;
+  if (response.status === 204) return null;
+  return readJsonResponse(response);
 }
 
 async function deleteAuth(path, token) {
   const response = await fetch(path, {
     method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   });
 
   if (response.status === 204) return null;
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : "Request failed";
-    throw new Error(detail);
-  }
-
-  return data;
+  return readJsonResponse(response);
 }
 
 /**
